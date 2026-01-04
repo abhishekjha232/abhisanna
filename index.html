@@ -5,12 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Abhishek & Sana ❤️</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PeerJS for direct connection without Firebase -->
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); }
         body { background: #fff1f2; font-family: sans-serif; overflow: hidden; }
-        canvas { touch-action: none; }
+        canvas { touch-action: none; background: white; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
         .msg-appear { animation: slideUp 0.3s ease-out; }
@@ -23,7 +21,7 @@
     <div id="setup-overlay" class="hidden fixed inset-0 z-[100] bg-pink-100 flex items-center justify-center p-4">
         <div class="glass p-8 rounded-[40px] shadow-2xl text-center border-4 border-white max-w-sm w-full">
             <h1 class="text-2xl font-black text-pink-500 mb-2">Access Required ❤️</h1>
-            <p class="text-xs text-gray-400 mb-6">Please use your link to enter.</p>
+            <p class="text-xs text-gray-400 mb-6 font-medium">Please use your unique link to enter.</p>
             <div class="space-y-3">
                 <div class="bg-white/50 p-3 rounded-2xl text-left border border-white">
                     <p class="text-[10px] font-bold uppercase text-pink-400">Abhishek's Link:</p>
@@ -51,7 +49,7 @@
             <div class="glass rounded-[32px] p-3 shadow-xl border border-white">
                 <div class="flex gap-2 mb-2 items-center">
                     <div id="connection-status" class="text-[10px] font-bold text-gray-400 ml-2 bg-white/50 px-3 py-1 rounded-full uppercase tracking-tighter">
-                        📡 Offline
+                        📡 Connecting...
                     </div>
                     <input id="vid-id" type="text" placeholder="YouTube URL..." class="flex-1 px-4 py-2 rounded-full text-xs outline-none bg-white">
                     <button id="sync-vid-btn" class="bg-pink-500 text-white px-4 py-2 rounded-full font-bold text-xs active:scale-95 transition-all">Sync</button>
@@ -66,7 +64,7 @@
                     <span class="text-pink-500 font-bold text-xs italic">Live Sketch ✨</span>
                     <button id="clear-canvas" class="text-[10px] text-gray-400 hover:text-pink-500 transition-colors uppercase font-bold">Clear</button>
                 </div>
-                <canvas id="canvas" class="flex-1 bg-white rounded-2xl cursor-crosshair border border-pink-50 shadow-inner"></canvas>
+                <canvas id="canvas" class="flex-1 rounded-2xl cursor-crosshair border border-pink-50 shadow-inner"></canvas>
             </div>
         </div>
 
@@ -76,7 +74,7 @@
                 <div>
                     <h2 id="partner-name" class="font-bold text-gray-800 tracking-tight">Partner</h2>
                     <div class="flex gap-2 text-[10px] font-bold">
-                        <span id="other-status" class="text-pink-400">Not Connected</span>
+                        <span id="other-status" class="text-pink-400">Connecting...</span>
                         <span id="battery-text" class="text-gray-400">--%</span>
                     </div>
                 </div>
@@ -95,16 +93,13 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const myName = urlParams.get('user');
-        const partnerName = myName === 'Abhishek' ? 'Sana' : 'Abhishek';
+        const partnerName = (myName === 'Abhishek') ? 'Sana' : 'Abhishek';
         
-        const peerId = `abhisanna-room-${myName}`;
-        const targetPeerId = `abhisanna-room-${partnerName}`;
-        
-        let peer = null;
-        let conn = null;
-        let hugActive = false;
+        // Using a reliable public WebSocket relay (PieSocket or similar pattern)
+        // For 100% workability in one file without API keys, we'll use a public Pub/Sub relay
+        const roomId = "abhisanna_private_room_2024";
+        let socket;
 
-        // UI Elements
         const statusEl = document.getElementById('connection-status');
         const partnerStatusEl = document.getElementById('other-status');
         const msgContainer = document.getElementById('messages');
@@ -112,65 +107,45 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        if (!myName || (myName !== 'Abhishek' && myName !== 'Sana')) {
-            document.getElementById('setup-overlay').classList.remove('hidden');
-        } else {
+        function init() {
+            if (!myName || (myName !== 'Abhishek' && myName !== 'Sana')) {
+                document.getElementById('setup-overlay').classList.remove('hidden');
+                return;
+            }
             document.getElementById('partner-name').textContent = partnerName;
-            initPeer();
+            connectSync();
             setupCanvas();
         }
 
-        function initPeer() {
-            // Using a unique ID based on the user name to find each other
-            peer = new Peer(peerId);
+        function connectSync() {
+            // Using a free public WebSocket relay service
+            socket = new WebSocket(`wss://free.piesocket.com/v3/${roomId}?api_key=VCXCEuvh3eb9AxYyzp9836906y6FvN9R8XzV6T3U&notify_self=0`);
 
-            peer.on('open', (id) => {
-                statusEl.innerHTML = '<span class="text-yellow-500">●</span> Searching...';
-                tryConnect();
-            });
-
-            peer.on('connection', (incomingConn) => {
-                setupConnection(incomingConn);
-            });
-
-            peer.on('error', (err) => {
-                console.error(err);
-                statusEl.innerHTML = '<span class="text-red-500">●</span> Error';
-                // Retry after 5 seconds if connection fails
-                setTimeout(initPeer, 5000);
-            });
-        }
-
-        function tryConnect() {
-            const outConn = peer.connect(targetPeerId);
-            setupConnection(outConn);
-        }
-
-        function setupConnection(connection) {
-            conn = connection;
-
-            conn.on('open', () => {
+            socket.onopen = () => {
                 statusEl.innerHTML = '<span class="text-green-500">●</span> Live';
-                partnerStatusEl.textContent = 'Online';
-                partnerStatusEl.classList.replace('text-pink-400', 'text-green-500');
-                
-                // Share battery info
+                // Signal presence
+                sendData({ type: 'presence', user: myName, status: 'online' });
                 sendBatteryStatus();
-            });
+            };
 
-            conn.on('data', (data) => {
-                handleData(data);
-            });
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleIncomingData(data);
+            };
 
-            conn.on('close', () => {
-                partnerStatusEl.textContent = 'Offline';
-                partnerStatusEl.classList.replace('text-green-500', 'text-pink-400');
-                statusEl.innerHTML = '<span class="text-yellow-500">●</span> Reconnecting...';
-                setTimeout(tryConnect, 3000);
-            });
+            socket.onclose = () => {
+                statusEl.innerHTML = '<span class="text-red-500">●</span> Retrying...';
+                setTimeout(connectSync, 3000);
+            };
         }
 
-        function handleData(data) {
+        function sendData(data) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(data));
+            }
+        }
+
+        function handleIncomingData(data) {
             switch(data.type) {
                 case 'chat':
                     addMessage(data.text, false);
@@ -187,6 +162,10 @@
                 case 'hug':
                     triggerHug();
                     break;
+                case 'presence':
+                    partnerStatusEl.textContent = 'Online';
+                    partnerStatusEl.className = 'text-green-500';
+                    break;
                 case 'battery':
                     document.getElementById('battery-text').textContent = `${data.charging?'⚡':''} ${data.level}%`;
                     break;
@@ -197,15 +176,15 @@
         function addMessage(text, isMine) {
             const div = document.createElement('div');
             div.className = `flex flex-col ${isMine ? 'items-end' : 'items-start'} mb-4 msg-appear`;
-            div.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'bg-pink-500 text-white rounded-tr-none' : 'bg-white border border-pink-100'} shadow-sm">${text}</div>`;
+            div.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'bg-pink-500 text-white rounded-tr-none' : 'bg-white border border-pink-100'} shadow-sm text-sm">${text}</div>`;
             msgContainer.appendChild(div);
             msgContainer.scrollTop = msgContainer.scrollHeight;
         }
 
         document.getElementById('send-btn').onclick = () => {
             const text = msgInput.value.trim();
-            if (text && conn && conn.open) {
-                conn.send({ type: 'chat', text });
+            if (text) {
+                sendData({ type: 'chat', text });
                 addMessage(text, true);
                 msgInput.value = '';
             }
@@ -216,18 +195,16 @@
         document.getElementById('sync-vid-btn').onclick = () => {
             const val = document.getElementById('vid-id').value;
             const id = val.includes('v=') ? val.split('v=')[1].split('&')[0] : (val.includes('be/') ? val.split('be/')[1] : val);
-            if (id && conn && conn.open) {
-                conn.send({ type: 'video', id });
+            if (id) {
+                sendData({ type: 'video', id });
                 document.getElementById('player-frame').src = `https://www.youtube.com/embed/${id}?autoplay=1`;
             }
         };
 
         // Feature: Hug
         document.getElementById('hug-btn').onclick = () => {
-            if (conn && conn.open) {
-                conn.send({ type: 'hug' });
-                triggerHug();
-            }
+            sendData({ type: 'hug' });
+            triggerHug();
         };
 
         function triggerHug() {
@@ -240,35 +217,33 @@
         function setupCanvas() {
             let drawing = false;
             const resize = () => { 
-                const temp = ctx.getImageData(0,0,canvas.width,canvas.height);
                 canvas.width = canvas.offsetWidth; 
                 canvas.height = canvas.offsetHeight;
-                ctx.putImageData(temp, 0, 0);
             };
             resize(); window.onresize = resize;
 
             const draw = (e) => {
                 if (!drawing) return;
                 const rect = canvas.getBoundingClientRect();
-                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                const x = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / canvas.width;
+                const y = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top) / canvas.height;
                 
+                // Draw locally
                 ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#ec4899';
-                ctx.lineTo(x, y); ctx.stroke();
+                ctx.lineTo(x * canvas.width, y * canvas.height); 
+                ctx.stroke();
                 
-                if (conn && conn.open) {
-                    conn.send({ type: 'draw', x, y, start: false });
-                }
+                sendData({ type: 'draw', x, y, start: false });
             };
 
             const start = (e) => {
                 drawing = true; 
                 ctx.beginPath(); 
                 const rect = canvas.getBoundingClientRect();
-                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-                ctx.moveTo(x, y);
-                if (conn && conn.open) conn.send({ type: 'draw', x, y, start: true });
+                const x = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / canvas.width;
+                const y = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top) / canvas.height;
+                ctx.moveTo(x * canvas.width, y * canvas.height);
+                sendData({ type: 'draw', x, y, start: true });
             };
 
             canvas.onmousedown = start;
@@ -276,34 +251,37 @@
             canvas.onmousemove = draw;
             canvas.ontouchmove = (e) => { draw(e); e.preventDefault(); };
             window.onmouseup = () => drawing = false;
+            window.ontouchend = () => drawing = false;
             
             document.getElementById('clear-canvas').onclick = () => {
                 ctx.clearRect(0,0,canvas.width,canvas.height);
-                if (conn && conn.open) conn.send({ type: 'clear' });
+                sendData({ type: 'clear' });
             };
         }
 
         function drawFromPartner(data) {
             if (data.start) {
                 ctx.beginPath();
-                ctx.moveTo(data.x, data.y);
+                ctx.moveTo(data.x * canvas.width, data.y * canvas.height);
             } else {
                 ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#f472b6';
-                ctx.lineTo(data.x, data.y); ctx.stroke();
+                ctx.lineTo(data.x * canvas.width, data.y * canvas.height); 
+                ctx.stroke();
             }
         }
 
-        // Feature: Battery
         function sendBatteryStatus() {
-            if ('getBattery' in navigator && conn && conn.open) {
+            if ('getBattery' in navigator) {
                 navigator.getBattery().then(bat => {
-                    const send = () => conn.send({ type: 'battery', level: Math.round(bat.level*100), charging: bat.charging });
+                    const send = () => sendData({ type: 'battery', level: Math.round(bat.level*100), charging: bat.charging });
                     send();
                     bat.onlevelchange = send;
                     bat.onchargingchange = send;
                 });
             }
         }
+
+        window.onload = init;
     </script>
 </body>
 </html>
