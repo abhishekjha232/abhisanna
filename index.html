@@ -7,9 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, orderBy, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- FIREBASE CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyBxm9XNECnnua2ygeOSfQUQAoon8VBabgQ",
             authDomain: "abhisanna-232.firebaseapp.com",
@@ -20,23 +20,45 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = 'abhisanna-232';
 
-        // IDENTIFICATION LOGIC (Using URL params)
         const urlParams = new URLSearchParams(window.location.search);
-        let myName = urlParams.get('user'); // Expects ?user=Abhishek or ?user=Sana
+        let myName = urlParams.get('user'); 
+        let isAuthReady = false;
 
-        function init() {
+        async function init() {
             if (!myName || (myName !== 'Abhishek' && myName !== 'Sana')) {
                 document.getElementById('setup-overlay').classList.remove('hidden');
                 return;
             }
             
+            const statusIndicator = document.getElementById('connection-status');
+            
+            try {
+                // Attempt Anonymous Sign-in
+                await signInAnonymously(auth);
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        isAuthReady = true;
+                        statusIndicator.innerHTML = '<span class="text-green-500">●</span> Connected';
+                        startAppFeatures();
+                    }
+                });
+            } catch (error) {
+                console.error("Auth failed:", error);
+                statusIndicator.innerHTML = '<span class="text-red-500">●</span> Auth Error';
+                if (error.code === 'auth/operation-not-allowed') {
+                    alert("ENABLE ANONYMOUS AUTH: Go to Firebase Console > Authentication > Sign-in Method and enable 'Anonymous'.");
+                }
+            }
+        }
+
+        function startAppFeatures() {
             document.getElementById('setup-overlay').classList.add('hidden');
             document.getElementById('user-display-name').textContent = myName === 'Abhishek' ? 'Sana' : 'Abhishek';
             
-            // Start features
             setupChat(); 
             setupDoodle(); 
             setupPresenceListener(); 
@@ -44,16 +66,17 @@
             setupHugListener();
             updatePresence(true);
             
-            // Battery Sync
+            setInterval(() => updatePresence(true), 15000);
+            
             if ('getBattery' in navigator) {
                 navigator.getBattery().then(bat => {
                     const up = () => {
+                        if (!isAuthReady) return;
                         setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'presence', myName), {
                             batteryLevel: Math.round(bat.level * 100),
                             isCharging: bat.charging,
-                            online: true,
                             lastSeen: Date.now()
-                        }, { merge: true }).catch(() => {});
+                        }, { merge: true }).catch(err => console.error("Battery sync err:", err));
                     };
                     up(); bat.onlevelchange = up; bat.onchargingchange = up;
                 });
@@ -61,34 +84,33 @@
         }
 
         async function updatePresence(isOnline) {
-            if (!myName) return;
+            if (!myName || !isAuthReady) return;
             try {
-                const presenceRef = doc(db, 'artifacts', appId, 'public', 'data', 'presence', myName);
-                await setDoc(presenceRef, { 
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'presence', myName), { 
                     online: isOnline, 
                     lastSeen: Date.now(), 
                     name: myName 
                 }, { merge: true });
-            } catch (e) { console.error("Presence error", e); }
+            } catch (e) { console.warn("Presence failed"); }
         }
 
         window.sendMessage = async () => {
             const input = document.getElementById('msg-input');
             const text = input.value.trim();
-            if (!text || !myName) return;
+            if (!text || !myName || !isAuthReady) return;
             try {
-                const msgText = text;
+                const val = text;
                 input.value = '';
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
-                    text: msgText, 
+                    text: val, 
                     sender: myName, 
                     timestamp: serverTimestamp()
                 });
-            } catch (e) { console.error("Send failed", e); }
+            } catch (e) { alert("Send failed. Check Console."); }
         };
 
         window.sendHugRequest = async () => {
-            if (!myName) return;
+            if (!myName || !isAuthReady) return;
             const btn = document.getElementById('hug-btn');
             btn.innerHTML = "⏳";
             try {
@@ -103,7 +125,7 @@
         window.loadVideo = async () => {
             const val = document.getElementById('vid-id').value;
             const id = val.includes('v=') ? val.split('v=')[1].split('&')[0] : (val.includes('be/') ? val.split('be/')[1] : val);
-            if (id && myName) {
+            if (id && myName && isAuthReady) {
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sync', 'video'), { id });
             }
         };
@@ -122,7 +144,7 @@
                     container.appendChild(div);
                 });
                 container.scrollTop = container.scrollHeight;
-            });
+            }, (err) => { console.error("Chat sync error:", err); });
         }
 
         function setupDoodle() {
@@ -141,15 +163,25 @@
                 ctx.lineTo(x, y); ctx.stroke();
             };
 
-            canvas.onmousedown = (e) => { drawing = true; ctx.beginPath(); draw(e); };
+            const startDrawing = (e) => { drawing = true; ctx.beginPath(); draw(e); };
+            canvas.onmousedown = startDrawing;
+            canvas.ontouchstart = (e) => { startDrawing(e); e.preventDefault(); };
             canvas.onmousemove = draw;
-            canvas.onmouseup = async () => { 
+            canvas.ontouchmove = (e) => { draw(e); e.preventDefault(); };
+            
+            const endDrawing = async () => { 
                 drawing = false; 
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'doodle', 'current'), { 
-                    image: canvas.toDataURL(), 
-                    updatedBy: myName 
-                });
+                if (!isAuthReady) return;
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'doodle', 'current'), { 
+                        image: canvas.toDataURL(), 
+                        updatedBy: myName,
+                        timestamp: Date.now()
+                    });
+                } catch(e) {}
             };
+            canvas.onmouseup = endDrawing;
+            canvas.ontouchend = endDrawing;
             
             onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'doodle', 'current'), (d) => {
                 if (d.exists() && d.data().updatedBy !== myName) {
@@ -165,7 +197,7 @@
                 snap.forEach(d => {
                     if (d.id !== myName) {
                         const data = d.data();
-                        const isOnline = (Date.now() - (data.lastSeen || 0)) < 15000;
+                        const isOnline = (Date.now() - (data.lastSeen || 0)) < 40000;
                         document.getElementById('other-status').textContent = isOnline ? 'Online' : 'Offline';
                         if (data.batteryLevel) document.getElementById('battery-text').textContent = `${data.isCharging?'⚡':''} ${data.batteryLevel}%`;
                     }
@@ -175,17 +207,22 @@
 
         function setupVideoSync() {
             onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sync', 'video'), (d) => {
-                if (d.exists()) document.getElementById('player-frame').src = `https://www.youtube.com/embed/${d.data().id}?autoplay=1`;
+                if (d.exists()) {
+                    const currentSrc = document.getElementById('player-frame').src;
+                    if (!currentSrc.includes(d.data().id)) {
+                        document.getElementById('player-frame').src = `https://www.youtube.com/embed/${d.data().id}?autoplay=1`;
+                    }
+                }
             });
         }
 
         function setupHugListener() {
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'hugs'), (snap) => {
-                let count = 0;
-                snap.forEach(d => { if(Date.now() - d.data().timestamp < 10000) count++; });
-                if (count >= 2) {
+                let activeHugs = 0;
+                snap.forEach(d => { if(Date.now() - d.data().timestamp < 15000) activeHugs++; });
+                if (activeHugs >= 2) {
                     document.getElementById('hug-overlay').classList.remove('hidden');
-                    setTimeout(() => document.getElementById('hug-overlay').classList.add('hidden'), 3000);
+                    setTimeout(() => document.getElementById('hug-overlay').classList.add('hidden'), 5000);
                 }
             });
         }
@@ -193,71 +230,82 @@
         window.onload = init;
     </script>
     <style>
-        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
+        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); }
         body { background: #fff1f2; font-family: sans-serif; overflow: hidden; }
+        canvas { touch-action: none; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
     </style>
 </head>
 <body class="h-screen w-screen flex items-center justify-center p-2 sm:p-4">
-    <!-- Links Setup Overlay -->
+    <!-- Setup Overlay -->
     <div id="setup-overlay" class="hidden fixed inset-0 z-[100] bg-pink-100 flex items-center justify-center p-4">
         <div class="glass p-8 rounded-[40px] shadow-2xl text-center border-4 border-white max-w-sm w-full">
-            <h1 class="text-2xl font-black text-pink-500 mb-2">Private Access ❤️</h1>
-            <p class="text-xs text-gray-400 mb-6">You must use your unique personal link to enter the space.</p>
+            <h1 class="text-2xl font-black text-pink-500 mb-2">Login Required ❤️</h1>
+            <p class="text-xs text-gray-400 mb-6 px-4">Use the correct URL to sync with each other.</p>
             <div class="space-y-3">
                 <div class="bg-white/50 p-3 rounded-2xl text-left border border-white">
-                    <p class="text-[10px] font-bold uppercase text-pink-400 mb-1">Abhishek's Link:</p>
-                    <code class="text-[9px] break-all opacity-60">.../index.html?user=Abhishek</code>
+                    <p class="text-[10px] font-bold uppercase text-pink-400">Abhishek:</p>
+                    <code class="text-[9px] break-all opacity-60">?user=Abhishek</code>
                 </div>
                 <div class="bg-white/50 p-3 rounded-2xl text-left border border-white">
-                    <p class="text-[10px] font-bold uppercase text-pink-400 mb-1">Sana's Link:</p>
-                    <code class="text-[9px] break-all opacity-60">.../index.html?user=Sana</code>
+                    <p class="text-[10px] font-bold uppercase text-pink-400">Sana:</p>
+                    <code class="text-[9px] break-all opacity-60">?user=Sana</code>
                 </div>
             </div>
-            <p class="mt-6 text-[10px] text-gray-400">Add <b>?user=Name</b> to the end of your browser URL.</p>
         </div>
     </div>
 
-    <!-- Hug Overlay -->
+    <!-- Hug Animation -->
     <div id="hug-overlay" class="hidden fixed inset-0 z-50 bg-pink-500/40 flex items-center justify-center backdrop-blur-md">
         <div class="text-center animate-bounce">
             <span class="text-8xl">🫂</span>
-            <h1 class="text-white text-4xl font-black mt-4">VIRTUAL HUG!</h1>
+            <h1 class="text-white text-4xl font-black mt-4 drop-shadow-lg">VIRTUAL HUG!</h1>
         </div>
     </div>
 
     <div class="container max-w-6xl w-full h-full flex flex-col md:flex-row gap-4">
         <div class="flex-1 flex flex-col gap-4 min-h-0">
+            <!-- Video -->
             <div class="glass rounded-[32px] p-3 shadow-xl border border-white">
-                <div class="flex gap-2 mb-2">
-                    <input id="vid-id" type="text" placeholder="Paste YouTube link..." class="flex-1 px-4 py-2 rounded-full text-xs outline-none bg-white/60">
-                    <button onclick="loadVideo()" class="bg-pink-500 text-white px-4 py-2 rounded-full font-bold text-xs active:scale-95">Sync</button>
+                <div class="flex gap-2 mb-2 items-center">
+                    <div id="connection-status" class="text-[10px] font-bold text-gray-400 ml-2 whitespace-nowrap bg-white/50 px-3 py-1 rounded-full uppercase tracking-tighter">
+                        Connecting...
+                    </div>
+                    <input id="vid-id" type="text" placeholder="Paste YouTube link..." class="flex-1 px-4 py-2 rounded-full text-xs outline-none bg-white">
+                    <button onclick="loadVideo()" class="bg-pink-500 text-white px-4 py-2 rounded-full font-bold text-xs active:scale-95 transition-all">Sync</button>
                 </div>
-                <div class="aspect-video bg-black rounded-2xl overflow-hidden shadow-inner border border-white/50">
-                    <iframe id="player-frame" width="100%" height="100%" src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                <div class="aspect-video bg-black rounded-2xl overflow-hidden shadow-inner relative">
+                    <iframe id="player-frame" class="absolute inset-0 w-full h-full" src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
                 </div>
             </div>
+            <!-- Sketch -->
             <div class="flex-1 glass rounded-[32px] p-4 shadow-xl border border-white flex flex-col min-h-0">
-                <span class="text-pink-500 font-bold text-xs mb-2 italic text-center">Sketch pad ✨</span>
-                <canvas id="canvas" class="flex-1 bg-white/50 rounded-2xl cursor-crosshair touch-none border border-pink-50"></canvas>
+                <div class="flex justify-between items-center mb-2 px-2">
+                    <span class="text-pink-500 font-bold text-xs italic">Shared Sketchpad ✨</span>
+                    <button onclick="document.getElementById('canvas').getContext('2d').clearRect(0,0,999,999)" class="text-[10px] text-gray-400 hover:text-pink-500 transition-colors">Clear Local</button>
+                </div>
+                <canvas id="canvas" class="flex-1 bg-white rounded-2xl cursor-crosshair border border-pink-50 shadow-inner"></canvas>
             </div>
         </div>
 
+        <!-- Chat -->
         <div class="w-full md:w-[350px] flex flex-col glass rounded-[32px] shadow-xl border border-white overflow-hidden min-h-[400px]">
             <div class="p-4 border-b border-pink-100 flex items-center justify-between bg-white/50">
                 <div>
-                    <h2 id="user-display-name" class="font-bold text-gray-800">Partner</h2>
+                    <h2 id="user-display-name" class="font-bold text-gray-800 tracking-tight">Partner</h2>
                     <div class="flex gap-2 text-[10px] font-bold">
-                        <span id="other-status" class="text-pink-400">Searching...</span>
+                        <span id="other-status" class="text-pink-400">Offline</span>
                         <span id="battery-text" class="text-gray-400">--%</span>
                     </div>
                 </div>
-                <button id="hug-btn" onclick="sendHugRequest()" class="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-2xl hover:scale-110 active:scale-90 transition-all border border-pink-50">💝</button>
+                <button id="hug-btn" onclick="sendHugRequest()" class="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-2xl active:scale-90 transition-all border border-pink-50 hover:shadow-pink-100 hover:shadow-xl">💝</button>
             </div>
             <div id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-2 bg-pink-50/20"></div>
-            <div class="p-4 bg-white/50">
+            <div class="p-4 bg-white/60">
                 <div class="flex gap-2">
-                    <input id="msg-input" type="text" class="flex-1 py-3 px-5 rounded-full shadow-inner bg-white text-sm outline-none border border-pink-50" onkeypress="if(event.key === 'Enter') sendMessage()" placeholder="Send a heart...">
-                    <button onclick="sendMessage()" class="bg-pink-500 w-11 h-11 flex items-center justify-center rounded-full text-white shadow-lg active:scale-90">❤️</button>
+                    <input id="msg-input" type="text" class="flex-1 py-3 px-5 rounded-full bg-white text-sm outline-none border border-pink-50 shadow-sm" onkeypress="if(event.key === 'Enter') sendMessage()" placeholder="Message...">
+                    <button onclick="sendMessage()" class="bg-pink-500 w-11 h-11 flex items-center justify-center rounded-full text-white shadow-lg active:scale-90 transition-all">❤️</button>
                 </div>
             </div>
         </div>
