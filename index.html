@@ -15,9 +15,10 @@
     button:active { opacity:.85; }
     .chat { height:330px; display:flex; flex-direction:column; }
     #messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
-    .msg { background:#111827; border-radius:10px; padding:8px 10px; }
+    .msg { background:#111827; border-radius:10px; padding:8px 10px; font-size:14px; }
     .row { display:flex; gap:10px; }
     input { flex:1; padding:10px; border-radius:8px; border:1px solid #374151; background:#020617; color:#fff; }
+    .time { opacity:.6; font-size:11px; margin-left:4px; }
   </style>
 </head>
 
@@ -48,12 +49,12 @@
 <!-- YouTube -->
 <script src="https://www.youtube.com/iframe_api"></script>
 
-<!-- Firebase (compatible version, non-modular) -->
+<!-- Firebase compatible API -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
 
 <script>
-  // YOUR CONFIG (already filled)
+  // FIREBASE
   const firebaseConfig = {
     apiKey: "AIzaSyB_9JqdAaKxgcHGRkCjhKlZ2T-bc3LKEPs",
     authDomain: "abhishek-2ab6e.firebaseapp.com",
@@ -61,33 +62,45 @@
     projectId: "abhishek-2ab6e",
     storageBucket: "abhishek-2ab6e.firebasestorage.app",
     messagingSenderId: "873535193762",
-    appId: "1:873535193762:web:e1a0bbb5050bca54350dfb",
-    measurementId: "G-LHLHF9933B"
+    appId: "1:873535193762:web:e1a0bbb5050bca54350dfb"
   };
 
   const app = firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
   const room = "shared-room-1";
+
+  // YOUTUBE SYNC
   let player;
   let isSyncing = false;
 
   function onYouTubeIframeAPIReady() {
     player = new YT.Player("player", {
-      videoId: "dQw4w9WgXcQ", // change to any video id
+      videoId: "dQw4w9WgXcQ",
       playerVars: { controls: 0, rel: 0 },
-      events: { onStateChange: e => {} }
+      events: { onStateChange: onStateChange }
     });
+  }
+
+  // detect user actions (not programmatic sync events)
+  function onStateChange(e) {
+    if (isSyncing || !player) return;
+
+    const t = player.getCurrentTime();
+
+    if (e.data === YT.PlayerState.PLAYING) {
+      sendState("play", t);
+    } else if (e.data === YT.PlayerState.PAUSED) {
+      sendState("pause", t);
+    }
   }
 
   function playVideo() {
     player.playVideo();
-    sendState("play", player.getCurrentTime());
   }
 
   function pauseVideo() {
     player.pauseVideo();
-    sendState("pause", player.getCurrentTime());
   }
 
   function seekTo(sec) {
@@ -101,7 +114,7 @@
 
   db.ref(`rooms/${room}/video`).on("value", snap => {
     const data = snap.val();
-    if (!data || isSyncing || !player) return;
+    if (!data || !player) return;
 
     isSyncing = true;
 
@@ -119,22 +132,42 @@
   });
 
   // CHAT
+  const messagesDiv = document.getElementById("messages");
+  const input = document.getElementById("chatInput");
+
+  function renderMessage(text, time) {
+    const div = document.createElement("div");
+    div.className = "msg";
+    const date = new Date(time);
+    div.innerHTML = `${text} <span class="time">${date.toLocaleTimeString()}</span>`;
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
   function sendMessage() {
-    const input = document.getElementById("chatInput");
     const text = input.value.trim();
     if (!text) return;
 
-    db.ref(`rooms/${room}/chat`).push({ text, time: Date.now() });
+    db.ref(`rooms/${room}/chat`).push({
+      text,
+      time: Date.now()
+    });
+
     input.value = "";
   }
 
-  db.ref(`rooms/${room}/chat`).on("child_added", snap => {
-    const msg = snap.val();
-    const div = document.createElement("div");
-    div.className = "msg";
-    div.textContent = msg.text;
-    document.getElementById("messages").appendChild(div);
+  // Enter to send
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") sendMessage();
   });
+
+  // HISTORY + live messages
+  db.ref(`rooms/${room}/chat`)
+    .orderByChild("time")
+    .on("child_added", snap => {
+      const msg = snap.val();
+      renderMessage(msg.text, msg.time);
+    });
 </script>
 
 </body>
