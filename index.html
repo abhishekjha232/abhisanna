@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>YT Sync + Live Chat</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<title>YT Sync + Live Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <style>
-    body { font-family: Arial, sans-serif; background:#0f172a; color:#fff; margin:0; }
-    .wrap { max-width:900px; margin:0 auto; padding:20px; }
-    .card { background:#020617; border:1px solid #1f2937; border-radius:12px; padding:15px; margin-bottom:16px; }
-    #player { width:100%; aspect-ratio:16/9; border-radius:10px; }
-    .controls { display:flex; gap:10px; margin-top:10px; }
-    button { background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; }
-    button:active { opacity:.85; }
-    .chat { height:330px; display:flex; flex-direction:column; }
-    #messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
-    .msg { background:#111827; border-radius:10px; padding:8px 10px; font-size:14px; }
-    .row { display:flex; gap:10px; }
-    input { flex:1; padding:10px; border-radius:8px; border:1px solid #374151; background:#020617; color:#fff; }
-    .time { opacity:.6; font-size:11px; margin-left:4px; }
-  </style>
+<style>
+  body { font-family: Arial, sans-serif; background:#0f172a; color:#fff; margin:0; }
+  .wrap { max-width:900px; margin:0 auto; padding:20px; }
+  .card { background:#020617; border:1px solid #1f2937; border-radius:12px; padding:15px; margin-bottom:16px; }
+  #player { width:100%; aspect-ratio:16/9; border-radius:10px; }
+  .controls { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  button { background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; }
+  button:active { opacity:.85; }
+  .chat { height:330px; display:flex; flex-direction:column; }
+  #messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+  .msg { background:#111827; border-radius:10px; padding:8px 10px; font-size:14px; }
+  .row { display:flex; gap:10px; }
+  input { flex:1; padding:10px; border-radius:8px; border:1px solid #374151; background:#020617; color:#fff; }
+  .time { opacity:.6; font-size:11px; margin-left:4px; }
+</style>
 </head>
 
 <body>
@@ -32,6 +32,9 @@
       <button onclick="playVideo()">Play</button>
       <button onclick="pauseVideo()">Pause</button>
       <button onclick="seekTo(0)">Restart</button>
+
+      <input id="videoInput" placeholder="Paste YouTube link..." />
+      <button onclick="changeVideo()">Change Video</button>
     </div>
   </div>
 
@@ -48,106 +51,138 @@
 
 <script src="https://www.youtube.com/iframe_api"></script>
 
-<!-- Firebase scripts (CORRECT) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
 
 <script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyB_9JqdAaKxgcHGRkCjhKlZ2T-bc3LKEPs",
-    authDomain: "abhishek-2ab6e.firebaseapp.com",
-    databaseURL: "https://abhishek-2ab6e-default-rtdb.firebaseio.com",
-    projectId: "abhishek-2ab6e",
-    storageBucket: "abhishek-2ab6e.firebasestorage.app",
-    messagingSenderId: "873535193762",
-    appId: "1:873535193762:web:e1a0bbb5050bca54350dfb"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyB_9JqdAaKxgcHGRkCjhKlZ2T-bc3LKEPs",
+  authDomain: "abhishek-2ab6e.firebaseapp.com",
+  databaseURL: "https://abhishek-2ab6e-default-rtdb.firebaseio.com",
+  projectId: "abhishek-2ab6e",
+  storageBucket: "abhishek-2ab6e.firebasestorage.app",
+  messagingSenderId: "873535193762",
+  appId: "1:873535193762:web:e1a0bbb5050bca54350dfb"
+};
 
-  const app = firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-  const room = "shared-room-1";
+const room = "shared-room-1";
 
-  let player;
-  let isSyncing = false;
+let player;
+let isSyncing = false;
+let currentVideo = "dQw4w9WgXcQ";
 
-  function onYouTubeIframeAPIReady() {
-    player = new YT.Player("player", {
-      videoId: "dQw4w9WgXcQ",
-      playerVars: { controls: 0, rel: 0 },
-      events: { onStateChange: onStateChange }
-    });
-  }
-
-  function onStateChange(e) {
-    if (isSyncing || !player) return;
-    const t = player.getCurrentTime();
-
-    if (e.data === YT.PlayerState.PLAYING) sendState("play", t);
-    if (e.data === YT.PlayerState.PAUSED) sendState("pause", t);
-  }
-
-  function playVideo() { player.playVideo(); }
-  function pauseVideo() { player.pauseVideo(); }
-
-  function seekTo(sec) {
-    player.seekTo(sec, true);
-    sendState("seek", sec);
-  }
-
-  function sendState(type, time) {
-    db.ref(`rooms/${room}/video`).set({ type, time, updated: Date.now() });
-  }
-
-  db.ref(`rooms/${room}/video`).on("value", snap => {
-    const data = snap.val();
-    if (!data || !player) return;
-
-    isSyncing = true;
-
-    if (data.type === "play") {
-      player.seekTo(data.time, true);
-      player.playVideo();
-    } else if (data.type === "pause") {
-      player.seekTo(data.time, true);
-      player.pauseVideo();
-    } else if (data.type === "seek") {
-      player.seekTo(data.time, true);
-    }
-
-    setTimeout(() => isSyncing = false, 300);
+// YOUTUBE
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player("player", {
+    videoId: currentVideo,
+    playerVars: { controls: 0, rel: 0 },
+    events: { onStateChange: onStateChange }
   });
+}
 
-  // CHAT
-  const messagesDiv = document.getElementById("messages");
-  const input = document.getElementById("chatInput");
+function onStateChange(e) {
+  if (isSyncing || !player) return;
+  const t = player.getCurrentTime();
 
-  function renderMessage(text, time) {
-    const div = document.createElement("div");
-    div.className = "msg";
-    div.innerHTML = `${text} <span class="time">${new Date(time).toLocaleTimeString()}</span>`;
-    messagesDiv.appendChild(div);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  }
+  if (e.data === YT.PlayerState.PLAYING) sendState("play", t);
+  if (e.data === YT.PlayerState.PAUSED) sendState("pause", t);
+}
 
-  function sendMessage() {
-    const text = input.value.trim();
-    if (!text) return;
+function playVideo() { player.playVideo(); }
+function pauseVideo() { player.pauseVideo(); }
 
-    db.ref(`rooms/${room}/chat`).push({ text, time: Date.now() });
-    input.value = "";
-  }
+function seekTo(sec) {
+  player.seekTo(sec, true);
+  sendState("seek", sec);
+}
 
-  input.addEventListener("keydown", e => {
-    if (e.key === "Enter") sendMessage();
+// VIDEO SYNC
+function sendState(type, time) {
+  db.ref(`rooms/${room}/video`).set({
+    type,
+    time,
+    video: currentVideo,
+    updated: Date.now()
   });
+}
 
-  db.ref(`rooms/${room}/chat`)
-    .orderByChild("time")
-    .on("child_added", snap => {
-      const msg = snap.val();
-      renderMessage(msg.text, msg.time);
-    });
+db.ref(`rooms/${room}/video`).on("value", snap => {
+  const data = snap.val();
+  if (!data || !player) return;
+
+  isSyncing = true;
+
+  if (data.video && data.video !== currentVideo) {
+    currentVideo = data.video;
+    player.loadVideoById(currentVideo);
+  }
+
+  if (data.type === "play") {
+    player.seekTo(data.time, true);
+    player.playVideo();
+  } else if (data.type === "pause") {
+    player.seekTo(data.time, true);
+    player.pauseVideo();
+  } else if (data.type === "seek") {
+    player.seekTo(data.time, true);
+  }
+
+  setTimeout(() => isSyncing = false, 300);
+});
+
+// CHANGE VIDEO FROM INPUT
+function extractId(url) {
+  try {
+    if (url.includes("v=")) return new URL(url).searchParams.get("v");
+    if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+function changeVideo() {
+  const val = document.getElementById("videoInput").value.trim();
+  if (!val) return;
+
+  currentVideo = extractId(val);
+  player.loadVideoById(currentVideo);
+  sendState("seek", 0);
+}
+
+// CHAT
+const messagesDiv = document.getElementById("messages");
+const input = document.getElementById("chatInput");
+
+function renderMessage(text, time) {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = `${text} <span class="time">${new Date(time).toLocaleTimeString()}</span>`;
+  messagesDiv.appendChild(div);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function sendMessage() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  db.ref(`rooms/${room}/chat`).push({ text, time: Date.now() });
+  input.value = "";
+}
+
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter") sendMessage();
+});
+
+db.ref(`rooms/${room}/chat`)
+  .orderByChild("time")
+  .on("child_added", snap => {
+    const msg = snap.val();
+    renderMessage(msg.text, msg.time);
+  });
 </script>
 
 </body>
