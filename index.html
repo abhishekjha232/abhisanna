@@ -1,287 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Abhishek & Sana ❤️</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); }
-        body { background: #fff1f2; font-family: sans-serif; overflow: hidden; }
-        canvas { touch-action: none; background: white; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
-        .msg-appear { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
+  <meta charset="UTF-8" />
+  <title>YT Sync + Live Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body { font-family: Arial, sans-serif; background:#0f172a; color:#fff; margin:0; }
+    .wrap { max-width:900px; margin:0 auto; padding:20px; }
+    .card { background:#020617; border:1px solid #1f2937; border-radius:12px; padding:15px; margin-bottom:16px; }
+    #player { width:100%; aspect-ratio:16/9; border-radius:10px; }
+    .controls { display:flex; gap:10px; margin-top:10px; }
+    button { background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; }
+    button:active { opacity:.85; }
+    .chat { height:330px; display:flex; flex-direction:column; }
+    #messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+    .msg { background:#111827; border-radius:10px; padding:8px 10px; }
+    .row { display:flex; gap:10px; }
+    input { flex:1; padding:10px; border-radius:8px; border:1px solid #374151; background:#020617; color:#fff; }
+  </style>
 </head>
-<body class="h-screen w-screen flex items-center justify-center p-2 sm:p-4">
 
-    <!-- Identification Overlay -->
-    <div id="setup-overlay" class="hidden fixed inset-0 z-[100] bg-pink-100 flex items-center justify-center p-4">
-        <div class="glass p-8 rounded-[40px] shadow-2xl text-center border-4 border-white max-w-sm w-full">
-            <h1 class="text-2xl font-black text-pink-500 mb-2">Access Required ❤️</h1>
-            <p class="text-xs text-gray-400 mb-6 font-medium">Please use your unique link to enter.</p>
-            <div class="space-y-3">
-                <div class="bg-white/50 p-3 rounded-2xl text-left border border-white">
-                    <p class="text-[10px] font-bold uppercase text-pink-400">Abhishek's Link:</p>
-                    <code class="text-[9px] break-all opacity-60">?user=Abhishek</code>
-                </div>
-                <div class="bg-white/50 p-3 rounded-2xl text-left border border-white">
-                    <p class="text-[10px] font-bold uppercase text-pink-400">Sana's Link:</p>
-                    <code class="text-[9px] break-all opacity-60">?user=Sana</code>
-                </div>
-            </div>
-        </div>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <div id="player"></div>
+
+    <div class="controls">
+      <button onclick="playVideo()">Play</button>
+      <button onclick="pauseVideo()">Pause</button>
+      <button onclick="seekTo(0)">Restart</button>
     </div>
+  </div>
 
-    <!-- Hug Animation -->
-    <div id="hug-overlay" class="hidden fixed inset-0 z-50 bg-pink-500/40 flex items-center justify-center backdrop-blur-md">
-        <div class="text-center animate-bounce">
-            <span class="text-8xl">🫂</span>
-            <h1 class="text-white text-4xl font-black mt-4 drop-shadow-lg">VIRTUAL HUG!</h1>
-        </div>
+  <div class="card chat">
+    <div id="messages"></div>
+
+    <div class="row">
+      <input id="chatInput" placeholder="Message..." />
+      <button onclick="sendMessage()">Send</button>
     </div>
+  </div>
 
-    <div class="container max-w-6xl w-full h-full flex flex-col md:flex-row gap-4">
-        <div class="flex-1 flex flex-col gap-4 min-h-0">
-            <!-- Video Section -->
-            <div class="glass rounded-[32px] p-3 shadow-xl border border-white">
-                <div class="flex gap-2 mb-2 items-center">
-                    <div id="connection-status" class="text-[10px] font-bold text-gray-400 ml-2 bg-white/50 px-3 py-1 rounded-full uppercase tracking-tighter">
-                        📡 Connecting...
-                    </div>
-                    <input id="vid-id" type="text" placeholder="YouTube URL..." class="flex-1 px-4 py-2 rounded-full text-xs outline-none bg-white">
-                    <button id="sync-vid-btn" class="bg-pink-500 text-white px-4 py-2 rounded-full font-bold text-xs active:scale-95 transition-all">Sync</button>
-                </div>
-                <div class="aspect-video bg-black rounded-2xl overflow-hidden shadow-inner relative">
-                    <iframe id="player-frame" class="absolute inset-0 w-full h-full" src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-                </div>
-            </div>
-            <!-- Sketchpad -->
-            <div class="flex-1 glass rounded-[32px] p-4 shadow-xl border border-white flex flex-col min-h-0">
-                <div class="flex justify-between items-center mb-2 px-2">
-                    <span class="text-pink-500 font-bold text-xs italic">Live Sketch ✨</span>
-                    <button id="clear-canvas" class="text-[10px] text-gray-400 hover:text-pink-500 transition-colors uppercase font-bold">Clear</button>
-                </div>
-                <canvas id="canvas" class="flex-1 rounded-2xl cursor-crosshair border border-pink-50 shadow-inner"></canvas>
-            </div>
-        </div>
+</div>
 
-        <!-- Chat Section -->
-        <div class="w-full md:w-[350px] flex flex-col glass rounded-[32px] shadow-xl border border-white overflow-hidden min-h-[400px]">
-            <div class="p-4 border-b border-pink-100 flex items-center justify-between bg-white/50">
-                <div>
-                    <h2 id="partner-name" class="font-bold text-gray-800 tracking-tight">Partner</h2>
-                    <div class="flex gap-2 text-[10px] font-bold">
-                        <span id="other-status" class="text-pink-400">Connecting...</span>
-                        <span id="battery-text" class="text-gray-400">--%</span>
-                    </div>
-                </div>
-                <button id="hug-btn" class="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-2xl active:scale-90 transition-all border border-pink-50 hover:shadow-pink-100 hover:shadow-xl">💝</button>
-            </div>
-            <div id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-2 bg-pink-50/20"></div>
-            <div class="p-4 bg-white/60">
-                <div class="flex gap-2">
-                    <input id="msg-input" type="text" class="flex-1 py-3 px-5 rounded-full bg-white text-sm outline-none border border-pink-50 shadow-sm" placeholder="Message...">
-                    <button id="send-btn" class="bg-pink-500 w-11 h-11 flex items-center justify-center rounded-full text-white shadow-lg active:scale-90 transition-all">❤️</button>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- YouTube -->
+<script src="https://www.youtube.com/iframe_api"></script>
 
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const myName = urlParams.get('user');
-        const partnerName = (myName === 'Abhishek') ? 'Sana' : 'Abhishek';
-        
-        // Using a reliable public WebSocket relay (PieSocket or similar pattern)
-        // For 100% workability in one file without API keys, we'll use a public Pub/Sub relay
-        const roomId = "abhisanna_private_room_2024";
-        let socket;
+<!-- Firebase (compatible version, non-modular) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
 
-        const statusEl = document.getElementById('connection-status');
-        const partnerStatusEl = document.getElementById('other-status');
-        const msgContainer = document.getElementById('messages');
-        const msgInput = document.getElementById('msg-input');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+<script>
+  // YOUR CONFIG (already filled)
+  const firebaseConfig = {
+    apiKey: "AIzaSyB_9JqdAaKxgcHGRkCjhKlZ2T-bc3LKEPs",
+    authDomain: "abhishek-2ab6e.firebaseapp.com",
+    databaseURL: "https://abhishek-2ab6e-default-rtdb.firebaseio.com",
+    projectId: "abhishek-2ab6e",
+    storageBucket: "abhishek-2ab6e.firebasestorage.app",
+    messagingSenderId: "873535193762",
+    appId: "1:873535193762:web:e1a0bbb5050bca54350dfb",
+    measurementId: "G-LHLHF9933B"
+  };
 
-        function init() {
-            if (!myName || (myName !== 'Abhishek' && myName !== 'Sana')) {
-                document.getElementById('setup-overlay').classList.remove('hidden');
-                return;
-            }
-            document.getElementById('partner-name').textContent = partnerName;
-            connectSync();
-            setupCanvas();
-        }
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-        function connectSync() {
-            // Using a free public WebSocket relay service
-            socket = new WebSocket(`wss://free.piesocket.com/v3/${roomId}?api_key=VCXCEuvh3eb9AxYyzp9836906y6FvN9R8XzV6T3U&notify_self=0`);
+  const room = "shared-room-1";
+  let player;
+  let isSyncing = false;
 
-            socket.onopen = () => {
-                statusEl.innerHTML = '<span class="text-green-500">●</span> Live';
-                // Signal presence
-                sendData({ type: 'presence', user: myName, status: 'online' });
-                sendBatteryStatus();
-            };
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player("player", {
+      videoId: "dQw4w9WgXcQ", // change to any video id
+      playerVars: { controls: 0, rel: 0 },
+      events: { onStateChange: e => {} }
+    });
+  }
 
-            socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleIncomingData(data);
-            };
+  function playVideo() {
+    player.playVideo();
+    sendState("play", player.getCurrentTime());
+  }
 
-            socket.onclose = () => {
-                statusEl.innerHTML = '<span class="text-red-500">●</span> Retrying...';
-                setTimeout(connectSync, 3000);
-            };
-        }
+  function pauseVideo() {
+    player.pauseVideo();
+    sendState("pause", player.getCurrentTime());
+  }
 
-        function sendData(data) {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(data));
-            }
-        }
+  function seekTo(sec) {
+    player.seekTo(sec, true);
+    sendState("seek", sec);
+  }
 
-        function handleIncomingData(data) {
-            switch(data.type) {
-                case 'chat':
-                    addMessage(data.text, false);
-                    break;
-                case 'draw':
-                    drawFromPartner(data);
-                    break;
-                case 'clear':
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    break;
-                case 'video':
-                    document.getElementById('player-frame').src = `https://www.youtube.com/embed/${data.id}?autoplay=1`;
-                    break;
-                case 'hug':
-                    triggerHug();
-                    break;
-                case 'presence':
-                    partnerStatusEl.textContent = 'Online';
-                    partnerStatusEl.className = 'text-green-500';
-                    break;
-                case 'battery':
-                    document.getElementById('battery-text').textContent = `${data.charging?'⚡':''} ${data.level}%`;
-                    break;
-            }
-        }
+  function sendState(type, time) {
+    db.ref(`rooms/${room}/video`).set({ type, time, updated: Date.now() });
+  }
 
-        // Feature: Chat
-        function addMessage(text, isMine) {
-            const div = document.createElement('div');
-            div.className = `flex flex-col ${isMine ? 'items-end' : 'items-start'} mb-4 msg-appear`;
-            div.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2 ${isMine ? 'bg-pink-500 text-white rounded-tr-none' : 'bg-white border border-pink-100'} shadow-sm text-sm">${text}</div>`;
-            msgContainer.appendChild(div);
-            msgContainer.scrollTop = msgContainer.scrollHeight;
-        }
+  db.ref(`rooms/${room}/video`).on("value", snap => {
+    const data = snap.val();
+    if (!data || isSyncing || !player) return;
 
-        document.getElementById('send-btn').onclick = () => {
-            const text = msgInput.value.trim();
-            if (text) {
-                sendData({ type: 'chat', text });
-                addMessage(text, true);
-                msgInput.value = '';
-            }
-        };
-        msgInput.onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('send-btn').click(); };
+    isSyncing = true;
 
-        // Feature: Video
-        document.getElementById('sync-vid-btn').onclick = () => {
-            const val = document.getElementById('vid-id').value;
-            const id = val.includes('v=') ? val.split('v=')[1].split('&')[0] : (val.includes('be/') ? val.split('be/')[1] : val);
-            if (id) {
-                sendData({ type: 'video', id });
-                document.getElementById('player-frame').src = `https://www.youtube.com/embed/${id}?autoplay=1`;
-            }
-        };
+    if (data.type === "play") {
+      player.seekTo(data.time, true);
+      player.playVideo();
+    } else if (data.type === "pause") {
+      player.seekTo(data.time, true);
+      player.pauseVideo();
+    } else if (data.type === "seek") {
+      player.seekTo(data.time, true);
+    }
 
-        // Feature: Hug
-        document.getElementById('hug-btn').onclick = () => {
-            sendData({ type: 'hug' });
-            triggerHug();
-        };
+    setTimeout(() => isSyncing = false, 300);
+  });
 
-        function triggerHug() {
-            const overlay = document.getElementById('hug-overlay');
-            overlay.classList.remove('hidden');
-            setTimeout(() => overlay.classList.add('hidden'), 4000);
-        }
+  // CHAT
+  function sendMessage() {
+    const input = document.getElementById("chatInput");
+    const text = input.value.trim();
+    if (!text) return;
 
-        // Feature: Canvas
-        function setupCanvas() {
-            let drawing = false;
-            const resize = () => { 
-                canvas.width = canvas.offsetWidth; 
-                canvas.height = canvas.offsetHeight;
-            };
-            resize(); window.onresize = resize;
+    db.ref(`rooms/${room}/chat`).push({ text, time: Date.now() });
+    input.value = "";
+  }
 
-            const draw = (e) => {
-                if (!drawing) return;
-                const rect = canvas.getBoundingClientRect();
-                const x = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / canvas.width;
-                const y = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top) / canvas.height;
-                
-                // Draw locally
-                ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#ec4899';
-                ctx.lineTo(x * canvas.width, y * canvas.height); 
-                ctx.stroke();
-                
-                sendData({ type: 'draw', x, y, start: false });
-            };
+  db.ref(`rooms/${room}/chat`).on("child_added", snap => {
+    const msg = snap.val();
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.textContent = msg.text;
+    document.getElementById("messages").appendChild(div);
+  });
+</script>
 
-            const start = (e) => {
-                drawing = true; 
-                ctx.beginPath(); 
-                const rect = canvas.getBoundingClientRect();
-                const x = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / canvas.width;
-                const y = ((e.touches ? e.touches[0].clientY : e.clientY) - rect.top) / canvas.height;
-                ctx.moveTo(x * canvas.width, y * canvas.height);
-                sendData({ type: 'draw', x, y, start: true });
-            };
-
-            canvas.onmousedown = start;
-            canvas.ontouchstart = (e) => { start(e); e.preventDefault(); };
-            canvas.onmousemove = draw;
-            canvas.ontouchmove = (e) => { draw(e); e.preventDefault(); };
-            window.onmouseup = () => drawing = false;
-            window.ontouchend = () => drawing = false;
-            
-            document.getElementById('clear-canvas').onclick = () => {
-                ctx.clearRect(0,0,canvas.width,canvas.height);
-                sendData({ type: 'clear' });
-            };
-        }
-
-        function drawFromPartner(data) {
-            if (data.start) {
-                ctx.beginPath();
-                ctx.moveTo(data.x * canvas.width, data.y * canvas.height);
-            } else {
-                ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#f472b6';
-                ctx.lineTo(data.x * canvas.width, data.y * canvas.height); 
-                ctx.stroke();
-            }
-        }
-
-        function sendBatteryStatus() {
-            if ('getBattery' in navigator) {
-                navigator.getBattery().then(bat => {
-                    const send = () => sendData({ type: 'battery', level: Math.round(bat.level*100), charging: bat.charging });
-                    send();
-                    bat.onlevelchange = send;
-                    bat.onchargingchange = send;
-                });
-            }
-        }
-
-        window.onload = init;
-    </script>
 </body>
 </html>
