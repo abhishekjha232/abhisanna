@@ -46,15 +46,13 @@
 
 </div>
 
-<!-- YouTube -->
 <script src="https://www.youtube.com/iframe_api"></script>
 
-<!-- Firebase compatible API -->
+<!-- Firebase scripts (CORRECT) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
 
 <script>
-  // FIREBASE
   const firebaseConfig = {
     apiKey: "AIzaSyB_9JqdAaKxgcHGRkCjhKlZ2T-bc3LKEPs",
     authDomain: "abhishek-2ab6e.firebaseapp.com",
@@ -70,7 +68,6 @@ script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></s
 
   const room = "shared-room-1";
 
-  // YOUTUBE SYNC
   let player;
   let isSyncing = false;
 
@@ -82,26 +79,16 @@ script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></s
     });
   }
 
-  // detect user actions (not programmatic sync events)
   function onStateChange(e) {
     if (isSyncing || !player) return;
-
     const t = player.getCurrentTime();
 
-    if (e.data === YT.PlayerState.PLAYING) {
-      sendState("play", t);
-    } else if (e.data === YT.PlayerState.PAUSED) {
-      sendState("pause", t);
-    }
+    if (e.data === YT.PlayerState.PLAYING) sendState("play", t);
+    if (e.data === YT.PlayerState.PAUSED) sendState("pause", t);
   }
 
-  function playVideo() {
-    player.playVideo();
-  }
-
-  function pauseVideo() {
-    player.pauseVideo();
-  }
+  function playVideo() { player.playVideo(); }
+  function pauseVideo() { player.pauseVideo(); }
 
   function seekTo(sec) {
     player.seekTo(sec, true);
@@ -138,8 +125,7 @@ script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></s
   function renderMessage(text, time) {
     const div = document.createElement("div");
     div.className = "msg";
-    const date = new Date(time);
-    div.innerHTML = `${text} <span class="time">${date.toLocaleTimeString()}</span>`;
+    div.innerHTML = `${text} <span class="time">${new Date(time).toLocaleTimeString()}</span>`;
     messagesDiv.appendChild(div);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   }
@@ -148,20 +134,14 @@ script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></s
     const text = input.value.trim();
     if (!text) return;
 
-    db.ref(`rooms/${room}/chat`).push({
-      text,
-      time: Date.now()
-    });
-
+    db.ref(`rooms/${room}/chat`).push({ text, time: Date.now() });
     input.value = "";
   }
 
-  // Enter to send
   input.addEventListener("keydown", e => {
     if (e.key === "Enter") sendMessage();
   });
 
-  // HISTORY + live messages
   db.ref(`rooms/${room}/chat`)
     .orderByChild("time")
     .on("child_added", snap => {
