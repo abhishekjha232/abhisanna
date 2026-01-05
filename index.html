@@ -10,7 +10,7 @@
   .wrap { max-width:900px; margin:0 auto; padding:20px; }
   .card { background:#020617; border:1px solid #1f2937; border-radius:12px; padding:15px; margin-bottom:16px; }
   #player { width:100%; aspect-ratio:16/9; border-radius:10px; }
-  .controls { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .controls { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
   button { background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; }
   button:active { opacity:.85; }
   .chat { height:330px; display:flex; flex-direction:column; }
@@ -51,8 +51,9 @@
 
 <script src="https://www.youtube.com/iframe_api"></script>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+<!-- IMPORTANT: compat builds -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
 <script>
 const firebaseConfig = {
@@ -65,7 +66,7 @@ const firebaseConfig = {
   appId: "1:873535193762:web:e1a0bbb5050bca54350dfb"
 };
 
-const app = firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 const room = "shared-room-1";
@@ -99,7 +100,6 @@ function seekTo(sec) {
   sendState("seek", sec);
 }
 
-// VIDEO SYNC
 function sendState(type, time) {
   db.ref(`rooms/${room}/video`).set({
     type,
@@ -133,15 +133,13 @@ db.ref(`rooms/${room}/video`).on("value", snap => {
   setTimeout(() => isSyncing = false, 300);
 });
 
-// CHANGE VIDEO FROM INPUT
+// VIDEO CHANGE
 function extractId(url) {
   try {
     if (url.includes("v=")) return new URL(url).searchParams.get("v");
     if (url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0];
     return url;
-  } catch {
-    return url;
-  }
+  } catch { return url; }
 }
 
 function changeVideo() {
